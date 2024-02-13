@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 require 'sinatra'
-require 'csv'
-require 'securerandom'
 require 'cgi'
+require 'dotenv/load'
+require_relative 'db_connection'
 
 helpers do
   def h(text)
@@ -11,30 +11,22 @@ helpers do
   end
 end
 
-FILE_PATH = './memos.csv'
+configure do
+  db_connection = DBConnection.conn
+  result = db_connection.exec("SELECT * FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'memos'")
+  db_connection.exec('CREATE TABLE memos (id SERIAL PRIMARY KEY, title VARCHAR(255), content TEXT)') if result.values.empty?
+end
 
 def load_memos
-  return {} unless File.exist?(FILE_PATH)
-
   memos = {}
-  CSV.foreach(FILE_PATH, headers: true, header_converters: :symbol) do |row|
-    next if row.to_h.empty?
-
-    id = row[:id]
-    title = row[:title] || ''
-    content = row[:content] || ''
+  result = DBConnection.conn.exec('SELECT * FROM memos ORDER BY id DESC')
+  result.each do |row|
+    id = row['id']
+    title = row['title'] || ''
+    content = row['content'] || ''
     memos[id] = { title:, content: }
   end
   memos
-end
-
-def save_memos(memos)
-  CSV.open(FILE_PATH, 'wb') do |csv|
-    csv << %w[id title content]
-    memos.each do |id, memo|
-      csv << [id, memo[:title], memo[:content]]
-    end
-  end
 end
 
 get '/memos' do
@@ -46,35 +38,30 @@ get '/memos/new' do
   erb :new
 end
 
-get '/memos/:id' do
-  @memo = load_memos[params[:id]]
-  erb :show
-end
-
 post '/memos' do
-  memos = load_memos
-  id = SecureRandom.uuid
-  memos[id] = { title: params[:title], content: params[:content] }
-  save_memos(memos)
+  DBConnection.conn.exec_params('INSERT INTO memos (title, content) VALUES ($1, $2)', [params[:title], params[:content]])
   redirect to('/memos')
 end
 
+get '/memos/:id' do
+  result = DBConnection.conn.exec_params('SELECT * FROM memos WHERE id = $1 LIMIT 1', [params[:id]])
+  @memo = result.map { |row| row.transform_keys(&:to_sym) }.first
+
+  erb :show
+end
+
 get '/memos/:id/edit' do
-  @memo = load_memos[params[:id]]
+  result = DBConnection.conn.exec_params('SELECT * FROM memos WHERE id = $1 LIMIT 1', [params[:id]])
+  @memo = result.map { |row| row.transform_keys(&:to_sym) }.first
   erb :edit
 end
 
 patch '/memos/:id' do
-  memos = load_memos
-  memos[params[:id]][:title] = params[:title]
-  memos[params[:id]][:content] = params[:content]
-  save_memos(memos)
+  DBConnection.conn.exec_params('UPDATE memos SET title = $1, content = $2 WHERE id = $3', [params[:title], params[:content], params[:id].to_i])
   redirect to("/memos/#{params[:id]}")
 end
 
 delete '/memos/:id' do
-  memos = load_memos
-  memos.delete(params[:id])
-  save_memos(memos)
+  DBConnection.conn.exec_params('DELETE FROM memos WHERE id = $1', [params[:id].to_i])
   redirect to('/memos')
 end
