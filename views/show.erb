@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>メモ詳細</title>
+</head>
+<body>
+  <h1>メモ詳細</h1>
+  <h2><%= h(@memo[:title]) %></h2>
+  <p><%= h(@memo[:content]) %></p>
+  <a href="/memos/<%= params[:id] %>/edit">編集</a>
+  <form action="/memos/<%= params[:id] %>" method="post">
+    <input type="hidden" name="_method" value="delete">
+    <button type="submit">削除</button>
+  </form>
+  <a href="/memos">戻る</a>
+</body>
+</html>
