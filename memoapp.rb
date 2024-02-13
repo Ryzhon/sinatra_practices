@@ -25,7 +25,6 @@ def load_memos
     content = row[:content] || ''
     memos[id] = { title:, content: }
   end
-  p memos
   memos
 end
 
